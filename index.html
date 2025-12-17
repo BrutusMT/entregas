@@ -130,12 +130,14 @@ function atualizarLista(){
 }
 
 function editarEntrega(i){
-    const e=entregas[i];
-    const nome=prompt('Nome',e.nome);
-    if(!nome) return;
-    const endereco=prompt('Endereço',e.endereco);
-    const cep=prompt('CEP',e.cep);
-    e.nome=nome; e.endereco=endereco; e.cep=cep;
+    const e = entregas[i];
+    const novoEndereco = prompt('Editar endereço', e.endereco);
+    if(novoEndereco === null) return;
+    const novoCep = prompt('Editar CEP', e.cep);
+    if(novoCep === null) return;
+
+    e.endereco = novoEndereco;
+    e.cep = novoCep;
     salvar();
 }
 
