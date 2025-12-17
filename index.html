@@ -52,24 +52,15 @@ button{
 }
 
 .cards{ display:flex; flex-direction:column; gap:10px; }
-
 .card{ padding:15px; border-radius:8px; }
 .prioridade-alta{ background:var(--alta); }
 .prioridade-media{ background:var(--media); }
 .prioridade-baixa{ background:var(--baixa); }
-
 .card small{ opacity:0.8; }
-
 .card button{ background:#000; margin-top:10px; }
 
 #map{ width:100%; height:280px; border-radius:8px; border:none; }
 
-.status{ font-size:12px; margin-top:5px; }
-
-.filtros{ display:flex; gap:5px; }
-.filtros button{ background:#333; }
-
-/* MODAL */
 .modal{
     display:none;
     position:fixed;
@@ -87,7 +78,6 @@ button{
     padding:15px;
     border-radius:8px;
 }
-.modal-content h3{ margin-top:0; }
 </style>
 </head>
 <body>
@@ -110,13 +100,6 @@ button{
     </form>
 </div>
 
-<div class="section filtros">
-    <button onclick="filtrar('todas')">Todas</button>
-    <button onclick="filtrar(3)">Alta</button>
-    <button onclick="filtrar(2)">Média</button>
-    <button onclick="filtrar(1)">Baixa</button>
-</div>
-
 <div class="cards" id="listaEntregas"></div>
 
 <div class="section">
@@ -131,7 +114,6 @@ button{
 
 </div>
 
-<!-- MODAL HISTÓRICO -->
 <div class="modal" id="modalHistorico">
     <div class="modal-content">
         <h3>📜 Histórico de Entregas</h3>
@@ -144,9 +126,8 @@ button{
 let entregas = JSON.parse(localStorage.getItem('entregas')) || [];
 let historico = JSON.parse(localStorage.getItem('historico')) || [];
 let localAtual = null;
-let filtroAtual = 'todas';
 
-navigator.geolocation.getCurrentPosition(pos => {
+navigator.geolocation.getCurrentPosition(pos=>{
     localAtual = { lat: pos.coords.latitude, lng: pos.coords.longitude };
     atualizarLista();
 });
@@ -159,22 +140,18 @@ function calcularDistancia(lat1, lon1, lat2, lon2) {
     return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
 }
 
-function filtrar(p){ filtroAtual = p; atualizarLista(); }
-
 function atualizarLista(){
     const lista = document.getElementById('listaEntregas');
     lista.innerHTML = '';
-    let dados = filtroAtual==='todas' ? entregas : entregas.filter(e=>e.prioridade==filtroAtual);
-    dados.sort((a,b)=> b.score - a.score);
-    dados.forEach((e,i)=>{
+    entregas.sort((a,b)=>(a.distancia ?? Infinity)-(b.distancia ?? Infinity));
+    entregas.forEach((e,i)=>{
         const classe = e.prioridade==3?'prioridade-alta':e.prioridade==2?'prioridade-media':'prioridade-baixa';
         const card = document.createElement('div');
         card.className = `card ${classe}`;
         card.innerHTML = `
             <strong>${e.nome}</strong><br>
             <small>${e.endereco}</small><br>
-            📍 ${e.distancia ? e.distancia.toFixed(2)+' km':'--'}
-            <div class="status">Status: ${e.status}</div>
+            📍 ${e.distancia ? e.distancia.toFixed(2)+' km':'--'}<br>
             <button onclick="abrirMapa('${e.endereco}')">Iniciar rota</button>
             <button onclick="finalizar(${i})">Marcar como entregue</button>`;
         lista.appendChild(card);
@@ -187,7 +164,6 @@ function abrirMapa(endereco){
 
 function finalizar(i){
     const entrega = entregas[i];
-    entrega.status = 'Entregue';
     entrega.data = new Date().toLocaleString();
     historico.push(entrega);
     entregas.splice(i,1);
@@ -219,16 +195,19 @@ form.addEventListener('submit', async e => {
     const nome = document.getElementById('nome').value;
     const endereco = document.getElementById('endereco').value;
     const prioridade = parseInt(document.getElementById('prioridade').value);
-    let distancia = null;
+    let distancia = null, lat=null, lng=null;
     if(localAtual){
         try{
             const geo = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(endereco)}`);
             const data = await geo.json();
-            if(data[0]) distancia = calcularDistancia(localAtual.lat, localAtual.lng, data[0].lat, data[0].lon);
+            if(data[0]){
+                lat = parseFloat(data[0].lat);
+                lng = parseFloat(data[0].lon);
+                distancia = calcularDistancia(localAtual.lat, localAtual.lng, lat, lng);
+            }
         }catch{}
     }
-    const score = (distancia ? (10 - distancia) : 0) + prioridade * 2;
-    entregas.push({ nome, endereco, prioridade, distancia, score, status:'Pendente' });
+    entregas.push({ nome, endereco, prioridade, distancia, lat, lng });
     localStorage.setItem('entregas', JSON.stringify(entregas));
     form.reset();
     atualizarLista();
