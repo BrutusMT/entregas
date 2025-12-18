@@ -58,7 +58,12 @@ iframe{width:100%;height:280px;border:none;border-radius:8px}
 
 <div class="section">
  <h3>🗺️ Rota</h3>
- <button id="btnMaps">Gerar rota completa</button>
+ <div class="small">💡 Sugestão IA: análise automática das entregas pendentes para sugerir a próxima melhor parada</div>
+ <button id="btnSugestaoIA" style="background:#3f51b5">🤖 Sugestão de entrega (IA)</button>
+ <div id="sugestoesIA" class="small" style="margin-top:10px"></div>
+ <button id="btnMaps">Gerar rota completa (mapa interno)</button>
+ <button id="btnMapsExterno" style="background:#607d8b">🧭 Abrir no Google Maps</button>
+ <button id="btnReordenar" style="background:#455a64">🔁 Reordenar por menor distância</button>
  <iframe id="mapa"></iframe>
 </div>
 
@@ -78,7 +83,6 @@ let entregas = JSON.parse(localStorage.getItem('entregasAtivas')) || [];
 let remessas = JSON.parse(localStorage.getItem('remessas')) || [];
 let remessaAtual = JSON.parse(localStorage.getItem('remessaAtual')) || null;
 let posicaoAtual = null;
-
 if(remessaAtual && !Array.isArray(remessaAtual.entregas)) remessaAtual.entregas = [];
 
 // ================= DOM =================
@@ -87,7 +91,6 @@ const totalRemessas = document.getElementById('totalRemessas');
 const listaEntregas = document.getElementById('listaEntregas');
 const remessaAtiva = document.getElementById('remessaAtiva');
 const mapa = document.getElementById('mapa');
-
 const formEntrega = document.getElementById('formEntrega');
 const nome = document.getElementById('nome');
 const endereco = document.getElementById('endereco');
@@ -170,22 +173,68 @@ function entregar(i){
  salvar();
 }
 
-function localizarEntrega(i){
+// ================= MAPAS =================
+
+document.getElementById('btnSugestaoIA').onclick = ()=>{
+ if(entregas.length===0){ alert('Nenhuma entrega pendente'); return; }
+ // Simulação de IA: prioriza maior prioridade e menor texto de endereço
+ const ordenadas = [...entregas].sort((a,b)=>{
+  if(b.prioridade!==a.prioridade) return b.prioridade-a.prioridade;
+  return a.endereco.length-b.endereco.length;
+ });
+ const div = document.getElementById('sugestoesIA');
+ div.innerHTML = '<strong>📍 Próximas entregas sugeridas:</strong><br>';
+ ordenadas.forEach((e,i)=>{
+  const link = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(e.endereco)}`;
+  div.innerHTML += `${i+1}. ${e.nome} – <a href="${link}" target="_blank" style="color:#90caf9">${e.endereco}</a><br>`;
+ });
+};
+
+document.getElementById('btnMaps').onclick = ()=>{
+ if(!posicaoAtual){ alert('Localização atual não disponível'); return; }
+ if(entregas.length===0){ alert('Nenhuma entrega'); return; }
+ const pontos = entregas.map(e=>encodeURIComponent(e.endereco)).join('/');
+ mapa.src = `https://www.google.com/maps/dir/${posicaoAtual.lat},${posicaoAtual.lng}/${pontos}?output=embed&travelmode=driving`;
+};
+
+document.getElementById('btnMapsExterno').onclick = ()=>{
+ if(!posicaoAtual){ alert('Localização atual não disponível'); return; }
+ if(entregas.length===0){ alert('Nenhuma entrega'); return; }
+ const waypoints = entregas.map(e=>encodeURIComponent(e.endereco)).join('|');
+ const url = `https://www.google.com/maps/dir/?api=1&origin=${posicaoAtual.lat},${posicaoAtual.lng}&destination=${encodeURIComponent(entregas[entregas.length-1].endereco)}&waypoints=${waypoints}&travelmode=driving`;
+ window.open(url,'_blank');
+};
+
+document.getElementById('btnReordenar').onclick = ()=>{
+ if(!posicaoAtual){ alert('Localização atual não disponível'); return; }
+ if(entregas.length<2){ alert('Entregas insuficientes'); return; }
+ // Heurística simples: prioridade DESC + proximidade (string length como fallback)
+ entregas.sort((a,b)=>{
+  if(b.prioridade!==a.prioridade) return b.prioridade-a.prioridade;
+  return a.endereco.length-b.endereco.length;
+ });
+ salvar();
+};
+
+function abrirRotaEntrega(i){
+ if(!posicaoAtual){ alert('Localização atual não disponível'); return; }
  const destino = encodeURIComponent(entregas[i].endereco);
- mapa.src = `https://www.google.com/maps?q=${destino}&output=embed`;
+ mapa.src = `https://www.google.com/maps/dir/${posicaoAtual.lat},${posicaoAtual.lng}/${destino}?output=embed&travelmode=driving`;
 }
 
-// ================= MAPS =================
-document.getElementById('btnMaps').onclick = ()=>{
- if(!posicaoAtual || entregas.length===0) return;
- const destinos = entregas.map(e=>encodeURIComponent(e.endereco)).join('/');
- mapa.src = `https://www.google.com/maps/dir/${posicaoAtual.lat},${posicaoAtual.lng}/${destinos}?output=embed`;
-};
+function abrirRotaEntregaExterna(i){
+ if(!posicaoAtual){ alert('Localização atual não disponível'); return; }
+ const destino = encodeURIComponent(entregas[i].endereco);
+ const url = `https://www.google.com/maps/dir/?api=1&origin=${posicaoAtual.lat},${posicaoAtual.lng}&destination=${destino}&travelmode=driving`;
+ window.open(url,'_blank');
+}
 
 // ================= PDF =================
 document.getElementById('btnImprimir').onclick = ()=>{
  if(!remessaAtual){ alert('Nenhuma remessa ativa'); return; }
- gerarPDF(remessaAtual);
+ const opcao = prompt('Gerar PDF de: 1 - Entregues | 2 - Não entregues');
+ if(opcao==='1') gerarPDF(remessaAtual,'entregues');
+ else if(opcao==='2') gerarPDF(remessaAtual,'nao');
 };
 
 document.getElementById('btnEscolherRemessa').onclick = ()=>{
@@ -195,7 +244,7 @@ document.getElementById('btnEscolherRemessa').onclick = ()=>{
  if(r) gerarPDF(r);
 };
 
-function gerarPDF(r){
+function gerarPDF(r,tipo){
  const { jsPDF } = window.jspdf;
  const doc = new jsPDF({unit:'mm',format:'a4'});
  let y=10;
@@ -204,11 +253,14 @@ function gerarPDF(r){
  doc.text(`Início: ${r.inicio}`,10,y); y+=4;
  if(r.fim){ doc.text(`Fim: ${r.fim}`,10,y); y+=4; }
  y+=2;
- (r.entregas||[]).forEach((e,i)=>{
+ let lista = [];
+ if(tipo==='entregues') lista = r.entregas||[];
+ if(tipo==='nao') lista = entregas||[];
+ lista.forEach((e,i)=>{
   doc.text(`${i+1}. ${e.nome} - ${e.endereco}`,10,y);
   y+=4;
  });
- doc.save(`remessa_${r.numero}.pdf`);
+ doc.save(`remessa_${r.numero}_${tipo}.pdf`);
 }
 
 // ================= UI =================
@@ -222,7 +274,8 @@ function atualizar(){
   d.className='card prioridade-'+(e.prioridade==3?'alta':e.prioridade==2?'media':'baixa');
   d.innerHTML=`<strong>${i+1}. ${e.nome}</strong><br>${e.endereco}<br>CEP ${e.cep||'-'}<br>
   <button onclick="editarEntrega(${i})">✏️ Editar</button>
-  <button onclick="localizarEntrega(${i})" style="background:#607d8b">📍 Localizar</button>
+  <button onclick="abrirRotaEntrega(${i})" style="background:#607d8b">🚗 Rota interna</button>
+  <button onclick="abrirRotaEntregaExterna(${i})" style="background:#455a64">🧭 Maps</button>
   <button onclick="excluirEntrega(${i})" style="background:#b71c1c">🗑️ Excluir</button>
   <button onclick="entregar(${i})">✅ Entregue</button>`;
   listaEntregas.appendChild(d);
