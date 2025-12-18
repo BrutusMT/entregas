@@ -39,9 +39,7 @@ iframe{width:100%;height:280px;border:none;border-radius:8px}
   <input id="nome" placeholder="Dono do pacote" required>
   <input id="endereco" placeholder="Endereço" list="sugestoesEnd" required>
   <datalist id="sugestoesEnd"></datalist>
-  <input id="cep" placeholder="CEP" required>
-  <button type="button" onclick="abrirScanner()">📷 Escanear CEP / Endereço</button>
-  <select id="prioridade">
+  <input id="cep" placeholder="CEP" required>  <select id="prioridade">
    <option value="3">Alta</option>
    <option value="2">Média</option>
    <option value="1">Baixa</option>
@@ -59,42 +57,140 @@ iframe{width:100%;height:280px;border:none;border-radius:8px}
  <button onclick="finalizarRemessa()">✅ Finalizar Remessa</button>
  <button onclick="gerarPDF()">📄 Gerar Relatório PDF</button>
 </div>
-</div>
-<div id="scannerModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:#000;z-index:9999">
- <video id="video" autoplay style="width:100%;height:100%;object-fit:cover"></video>
- <button onclick="fecharScanner()" style="position:absolute;top:10px;right:10px">❌</button>
-</div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script>
-let entregas=JSON.parse(localStorage.getItem('entregasAtivas'))||[];
-let remessas=JSON.parse(localStorage.getItem('remessas'))||[];
-let remessaAtual=null;
+</div><script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script><script>
+let entregas = JSON.parse(localStorage.getItem('entregasAtivas')) || [];
+let selecionadas = [];
+let remessas = JSON.parse(localStorage.getItem('remessas')) || [];
+let remessaAtual = null;
+
+// elementos DOM
+const formEntrega = document.getElementById('formEntrega');
+const nome = document.getElementById('nome');
+const endereco = document.getElementById('endereco');
+const cep = document.getElementById('cep');
+const prioridade = document.getElementById('prioridade');
+const scannerModal = document.getElementById('scannerModal');
+const video = document.getElementById('video');
+const mapa = document.getElementById('mapa');
 let posicaoAtual=null;
-let stream=null;function obterLocalizacao(cb){ navigator.geolocation.getCurrentPosition(p=>{ posicaoAtual={lat:p.coords.latitude,lng:p.coords.longitude}; if(cb)cb(); },()=>alert('Permita o acesso à localização')); }
+let stream=null;
 
-function abrirRemessa(){ if(remessaAtual)return alert('Já existe remessa aberta'); remessaAtual={inicio:new Date().toLocaleString(),entregas:[]}; entregas=[]; document.getElementById('remessaAtiva').innerText='🟢 Remessa iniciada em '+remessaAtual.inicio; salvar(); }
+function obterLocalizacao(cb){
+ navigator.geolocation.getCurrentPosition(p=>{
+  posicaoAtual={lat:p.coords.latitude,lng:p.coords.longitude};
+  if(cb)cb();
+ },()=>alert('Permita o acesso à localização'));
+}
 
-formEntrega.onsubmit=e=>{ e.preventDefault(); if(!remessaAtual)return alert('Abra uma remessa'); const nova={nome:nome.value,endereco:endereco.value,cep:cep.value,prioridade:+prioridade.value}; entregas.push(nova); salvarSugestoes(nova.endereco); formEntrega.reset(); salvar(); };
+function abrirRemessa(){
+ if(remessaAtual) return alert('Já existe remessa aberta');
+ remessaAtual = { inicio: new Date().toLocaleString(), entregas: [] };
+ entregas = [];
+ document.getElementById('remessaAtiva').innerHTML = '🟢 Remessa iniciada em ' + remessaAtual.inicio;
+ salvar();
+}
 
-function atualizar(){ pendentes.textContent=entregas.length; totalRemessas.textContent=remessas.length; listaEntregas.innerHTML=''; entregas.forEach((e,i)=>{ const d=document.createElement('div'); d.className='card prioridade-'+(e.prioridade==3?'alta':e.prioridade==2?'media':'baixa'); d.innerHTML=<strong>${e.nome}</strong><br>${e.endereco}<br>CEP ${e.cep}<br> <button onclick="marcarEntregue(${i})">✅ Entregue</button> <button onclick="marcarDevolvido(${i})">↩️ Devolvido</button>; listaEntregas.appendChild(d); }); atualizarMapa(); }
+formEntrega.onsubmit = e => {
+ e.preventDefault();
+ if(!remessaAtual) return alert('Abra uma remessa primeiro');
+ if(!nome.value || !endereco.value || !cep.value) return alert('Preencha todos os campos');
+ const nova = {
+  nome: nome.value.trim(),
+  endereco: endereco.value.trim(),
+  cep: cep.value.trim(),
+  prioridade: parseInt(prioridade.value,10)
+ };
+ entregas.push(nova);
+ salvarSugestoes(nova.endereco);
+ formEntrega.reset();
+ salvar();
+};
+ entregas.push(nova);
+ salvarSugestoes(nova.endereco);
+ formEntrega.reset();
+ salvar();
+};
 
-function iniciarJornadaMaps(){ if(!entregas.length)return alert('Nenhuma entrega'); obterLocalizacao(()=>{ const origem=${posicaoAtual.lat},${posicaoAtual.lng}; const destinos=entregas.map(e=>encodeURIComponent(e.endereco+' '+e.cep)).join('/'); window.open(https://www.google.com/maps/dir/${origem}/${destinos},'_blank'); }); }
+function atualizar(){
+ pendentes.textContent=entregas.length;
+ totalRemessas.textContent=remessas.length;
+ listaEntregas.innerHTML='';
+ entregas.forEach((e,i)=>{
+  const d=document.createElement('div');
+  d.className='card prioridade-'+(e.prioridade==3?'alta':e.prioridade==2?'media':'baixa');
+  d.innerHTML=`<strong>${e.nome}</strong><br>${e.endereco}<br>CEP ${e.cep}<br>
+  <button onclick="marcarEntregue(${i})">✅ Entregue</button>
+  <button onclick="marcarDevolvido(${i})">↩️ Devolvido</button>`;
+  listaEntregas.appendChild(d);
+ });
+ atualizarMapa();
+}
 
-function atualizarMapa(){ if(!entregas.length||!posicaoAtual)return; const origem=${posicaoAtual.lat},${posicaoAtual.lng}; const destinos=entregas.map(e=>encodeURIComponent(e.endereco+' '+e.cep)).join('/'); mapa.src=https://www.google.com/maps/dir/${origem}/${destinos}?output=embed; }
+function iniciarJornadaMaps(){
+ if(!entregas.length)return alert('Nenhuma entrega');
+ obterLocalizacao(()=>{
+  const origem=`${posicaoAtual.lat},${posicaoAtual.lng}`;
+  const destinos=entregas.map(e=>encodeURIComponent(e.endereco+' '+e.cep)).join('/');
+  window.open(`https://www.google.com/maps/dir/${origem}/${destinos}`,'_blank');
+ });
+}
 
-function marcarEntregue(i){ remessaAtual.entregas.push({...entregas[i],status:'ENTREGUE',data:new Date().toLocaleString()}); entregas.splice(i,1);salvar(); } function marcarDevolvido(i){ remessaAtual.entregas.push({...entregas[i],status:'DEVOLVIDO',data:new Date().toLocaleString()}); entregas.splice(i,1);salvar(); }
+function atualizarMapa(){
+ if(!entregas.length||!posicaoAtual)return;
+ const origem=`${posicaoAtual.lat},${posicaoAtual.lng}`;
+ const destinos=entregas.map(e=>encodeURIComponent(e.endereco+' '+e.cep)).join('/');
+ mapa.src=`https://www.google.com/maps/dir/${origem}/${destinos}?output=embed`;
+}
 
-function finalizarRemessa(){ if(!remessaAtual)return; remessaAtual.fim=new Date().toLocaleString(); remessas.push(remessaAtual); remessaAtual=null;entregas=[]; remessaAtiva.innerText='';salvar(); }
+function marcarEntregue(i){
+ remessaAtual.entregas.push({...entregas[i],status:'ENTREGUE',data:new Date().toLocaleString()});
+ entregas.splice(i,1);salvar();
+}
+function marcarDevolvido(i){
+ remessaAtual.entregas.push({...entregas[i],status:'DEVOLVIDO',data:new Date().toLocaleString()});
+ entregas.splice(i,1);salvar();
+}
 
-function gerarPDF(){ const {jsPDF}=window.jspdf;const pdf=new jsPDF();let y=10; pdf.text('Relatório de Remessas',10,y);y+=10; remessas.forEach((r,i)=>{ pdf.text(Remessa ${i+1},10,y);y+=6; pdf.text(Início: ${r.inicio},10,y);y+=6; pdf.text(Fim: ${r.fim},10,y);y+=6; r.entregas.forEach(e=>{pdf.text(- ${e.nome} | ${e.endereco} | ${e.status},12,y);y+=5;}); y+=8; }); pdf.save('relatorio_entregas.pdf'); }
+function finalizarRemessa(){
+ if(!remessaAtual)return;
+ remessaAtual.fim=new Date().toLocaleString();
+ remessas.push(remessaAtual);
+ remessaAtual=null;entregas=[];
+ remessaAtiva.innerText='';salvar();
+}
 
-function salvar(){ localStorage.setItem('remessas',JSON.stringify(remessas)); localStorage.setItem('entregasAtivas',JSON.stringify(entregas)); atualizar(); }
+function gerarPDF(){
+ const {jsPDF}=window.jspdf;const pdf=new jsPDF();let y=10;
+ pdf.text('Relatório de Remessas',10,y);y+=10;
+ remessas.forEach((r,i)=>{
+  pdf.text(`Remessa ${i+1}`,10,y);y+=6;
+  pdf.text(`Início: ${r.inicio}`,10,y);y+=6;
+  pdf.text(`Fim: ${r.fim}`,10,y);y+=6;
+  r.entregas.forEach(e=>{pdf.text(`- ${e.nome} | ${e.endereco} | ${e.status}`,12,y);y+=5;});
+  y+=8;
+ });
+ pdf.save('relatorio_entregas.pdf');
+}
 
-function salvarSugestoes(v){ const s=JSON.parse(localStorage.getItem('sugestoesEnd'))||[]; if(!s.includes(v))s.push(v); localStorage.setItem('sugestoesEnd',JSON.stringify(s)); carregarSugestoes(); } function carregarSugestoes(){ sugestoesEnd.innerHTML=''; (JSON.parse(localStorage.getItem('sugestoesEnd'))||[]).forEach(v=>{const o=document.createElement('option');o.value=v;sugestoesEnd.appendChild(o);}); }
+function salvar(){
+ localStorage.setItem('remessas',JSON.stringify(remessas));
+ localStorage.setItem('entregasAtivas',JSON.stringify(entregas));
+ atualizar();
+}
 
-async function abrirScanner(){ if(!('BarcodeDetector'in window))return alert('Scanner não suportado'); scannerModal.style.display='block'; stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}}); video.srcObject=stream; const det=new BarcodeDetector({formats:['qr_code']}); const scan=async()=>{const c=await det.detect(video);if(c.length){endereco.value=c[0].rawValue;fecharScanner();}else requestAnimationFrame(scan)};scan(); } function fecharScanner(){scannerModal.style.display='none';if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}}
+function salvarSugestoes(v){
+ const s=JSON.parse(localStorage.getItem('sugestoesEnd'))||[];
+ if(!s.includes(v))s.push(v);
+ localStorage.setItem('sugestoesEnd',JSON.stringify(s));
+ carregarSugestoes();
+}
+function carregarSugestoes(){
+ sugestoesEnd.innerHTML='';
+ (JSON.parse(localStorage.getItem('sugestoesEnd'))||[]).forEach(v=>{const o=document.createElement('option');o.value=v;sugestoesEnd.appendChild(o);});
+}
 
-obterLocalizacao(()=>{carregarSugestoes();atualizar();}); </script>
+{scannerModal.style.display='none';if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}}
 
-</body>
+obterLocalizacao(()=>{carregarSugestoes();atualizar();});
+</script></body>
 </html>
