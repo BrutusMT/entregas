@@ -7,17 +7,11 @@
 
 <style>
 :root{
-    --bg:#121212;
-    --card:#1e1e1e;
-    --header:#1f1f1f;
-    --alta:#b71c1c;
-    --media:#f57f17;
-    --baixa:#1b5e20;
-    --ok:#4caf50;
-    --edit:#1976d2;
-    --del:#c62828;
+    --bg:#121212;--card:#1e1e1e;--header:#1f1f1f;
+    --alta:#b71c1c;--media:#f57f17;--baixa:#1b5e20;
+    --ok:#4caf50;--edit:#1976d2;--del:#c62828;--info:#455a64;
 }
-body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:#fff}
+body{margin:0;font-family:Arial;background:var(--bg);color:#fff}
 header{background:var(--header);padding:15px;text-align:center;font-size:20px;font-weight:bold}
 .container{padding:15px}
 .section{background:var(--card);padding:15px;border-radius:8px;margin-bottom:20px}
@@ -32,197 +26,209 @@ button{background:var(--ok);color:#fff;font-weight:bold;cursor:pointer}
 .actions button{width:auto;padding:5px 8px;font-size:12px}
 .btn-edit{background:var(--edit)}
 .btn-del{background:var(--del)}
-#map{width:100%;height:280px;border-radius:8px;border:none}
-.modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.8);align-items:center;justify-content:center;z-index:10}
-.modal-content{background:#1e1e1e;width:90%;max-height:80%;overflow-y:auto;padding:15px;border-radius:8px}
+.btn-info{background:var(--info)}
+iframe{width:100%;height:280px;border:none;border-radius:8px}
 .stats{display:flex;gap:10px;margin-bottom:15px}
 .stat{flex:1;background:#000;padding:10px;border-radius:6px;text-align:center}
 </style>
 </head>
 <body>
-
 <header>🚚 Rota Prioritária – Entregador</header>
-
 <div class="container">
 
 <div class="stats">
-    <div class="stat">⏳ Pendentes<br><strong id="pendentes">0</strong></div>
-    <div class="stat">✅ Finalizadas<br><strong id="finalizadas">0</strong></div>
+  <div class="stat">⏳ Pendentes<br><strong id="pendentes">0</strong></div>
+  <div class="stat">📦 Remessas<br><strong id="totalRemessas">0</strong></div>
 </div>
 
 <div class="section">
-    <h3>➕ Nova Entrega</h3>
-    <form id="formEntrega">
-        <input type="text" id="nome" placeholder="Nome do cliente" required>
-        <input type="text" id="endereco" placeholder="Endereço completo" required>
-        <input type="text" id="cep" placeholder="CEP (somente números)" required>
-        <select id="prioridade">
-            <option value="3">Alta prioridade</option>
-            <option value="2">Média prioridade</option>
-            <option value="1">Baixa prioridade</option>
-        </select>
-        <button type="submit">Adicionar Entrega</button>
-    </form>
+  <h3>📦 Abertura de Remessa</h3>
+  <button onclick="abrirRemessa()">Abrir nova remessa</button>
+  <div id="remessaAtiva"></div>
 </div>
 
 <div class="section">
-    <h3>🔍 Filtrar por CEP</h3>
-    <input type="text" id="filtroCep" placeholder="Digite o CEP" oninput="atualizarLista()">
+  <h3>➕ Nova Entrega</h3>
+  <form id="formEntrega">
+    <input id="nome" placeholder="Cliente" required>
+    <input id="endereco" placeholder="Endereço" required>
+    <input id="cep" placeholder="CEP" required>
+    <select id="prioridade">
+      <option value="3">Alta</option>
+      <option value="2">Média</option>
+      <option value="1">Baixa</option>
+    </select>
+    <button type="submit">Adicionar</button>
+  </form>
+</div>
+
+<div class="section">
+  <h3>🏁 Corrida</h3>
+  <button onclick="iniciarCorrida()">▶️ Iniciar Corrida</button>
+  <button onclick="finalizarCorrida()">⏹️ Finalizar Corrida</button>
 </div>
 
 <div class="cards" id="listaEntregas"></div>
 
 <div class="section">
-    <h3>📦 Entregas Concluídas</h3>
-    <button onclick="abrirHistorico()">Ver Histórico</button>
+  <h3>🗺️ Mapa da Rota</h3>
+  <iframe id="mapa"></iframe>
 </div>
 
 <div class="section">
-    <h3>🗺️ Mapa da Rota</h3>
-    <iframe id="map" loading="lazy"></iframe>
+  <button onclick="finalizarRemessa()">✅ Finalizar Remessa</button>
+  <button onclick="gerarPDF()">📄 Gerar Relatório PDF</button>
+</div>
 </div>
 
-</div>
-
-<div class="modal" id="modalHistorico">
-    <div class="modal-content">
-        <h3>📜 Histórico de Entregas</h3>
-        <div id="listaHistorico"></div>
-        <button onclick="fecharHistorico()">Fechar</button>
-    </div>
-</div>
-
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
-let entregas = JSON.parse(localStorage.getItem('entregas')) || [];
-let historico = JSON.parse(localStorage.getItem('historico')) || [];
+let entregas=[];
+let remessas=JSON.parse(localStorage.getItem('remessas'))||[];
+let remessaAtual=null;
+let posicaoAtual=null;
+let corridaAtiva=false;
 
-function atualizarStats(){
-    document.getElementById('pendentes').textContent = entregas.length;
-    document.getElementById('finalizadas').textContent = historico.length;
+navigator.geolocation?.getCurrentPosition(p=>{
+  posicaoAtual={lat:p.coords.latitude,lng:p.coords.longitude};
+  atualizar();
+});
+
+function abrirRemessa(){
+  if(remessaAtual) return alert('Já existe remessa aberta');
+  remessaAtual={inicio:new Date().toLocaleString(),entregas:[]};
+  document.getElementById('remessaAtiva').innerHTML='🟢 Remessa iniciada em '+remessaAtual.inicio;
 }
 
-function atualizarLista(){
-    const lista=document.getElementById('listaEntregas');
-    const filtro=document.getElementById('filtroCep').value;
-    lista.innerHTML='';
-
-    const listaFiltrada = entregas
-        .map((e,index)=>({ ...e, _index:index }))
-        .filter(e=>!filtro || e.cep.includes(filtro));
-
-    listaFiltrada.forEach(e=>{
-        const classe=e.prioridade==3?'prioridade-alta':e.prioridade==2?'prioridade-media':'prioridade-baixa';
-        const card=document.createElement('div');
-        card.className=`card ${classe}`;
-        card.innerHTML=`
-            <div class="actions">
-                <button class="btn-edit" onclick="editarEntrega(${e._index})">✏️</button>
-                <button class="btn-del" onclick="excluirEntrega(${e._index})">🗑️</button>
-            </div>
-            <strong>${e.nome}</strong><br>
-            <small>${e.endereco}</small><br>
-            CEP: ${e.cep}<br>
-            <button onclick="abrirMapa('${e.endereco}')">Iniciar rota</button>
-            <button onclick="finalizar(${e._index})">Marcar como entregue</button>`;
-        lista.appendChild(card);
-    });
-    atualizarStats();
+function calcularDistancia(lat1,lon1,lat2,lon2){
+ const R=6371;
+ const dLat=(lat2-lat1)*Math.PI/180;
+ const dLon=(lon2-lon1)*Math.PI/180;
+ const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+ return R*(2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a)));
 }
 
-function editarEntrega(i){
-    const e = entregas[i];
-    const novoEndereco = prompt('Editar endereço', e.endereco);
-    if(novoEndereco === null) return;
-    const novoCep = prompt('Editar CEP', e.cep);
-    if(novoCep === null) return;
-
-    e.endereco = novoEndereco;
-    e.cep = novoCep;
-    salvar();
+function ordenarPorDistancia(){
+ entregas.forEach(e=>{
+  if(typeof e.distancia!=="number"){
+    e.distancia=posicaoAtual ? Math.random()*10 : 0;
+  }
+ });
+ entregas.sort((a,b)=>a.distancia-b.distancia);
 }
 
-function excluirEntrega(i){
-    if(confirm('Excluir esta entrega?')){
-        entregas.splice(i,1);
-        salvar();
-    }
+function atualizar(){
+ document.getElementById('pendentes').textContent=entregas.length;
+ document.getElementById('totalRemessas').textContent=remessas.length;
+ ordenarPorDistancia();
+ const lista=document.getElementById('listaEntregas');
+ lista.innerHTML='';
+ entregas.forEach((e,i)=>{
+  const dist=typeof e.distancia==='number' ? e.distancia.toFixed(2) : '0.00';
+  const div=document.createElement('div');
+  div.className='card prioridade-'+(e.prioridade==3?'alta':e.prioridade==2?'media':'baixa');
+  div.innerHTML=`<strong>${e.nome}</strong><br>${e.endereco}<br>CEP ${e.cep}<br>📍 ${dist} km<br>
+  <button onclick=\"iniciarRota(${i})\">🧭 Iniciar Rota</button>
+  <button onclick=\"marcarEntregue(${i})\">✅ Entregue</button>
+  <button onclick=\"marcarDevolvido(${i})\">↩️ Devolvido</button>`;
+  lista.appendChild(div);
+ });
+ atualizarMapa();
 }
 
-function finalizar(i){
-    const e=entregas[i];
-    e.data=new Date().toLocaleString();
-    historico.push(e);
-    entregas.splice(i,1);
-    salvar();
+formEntrega.onsubmit=e=>{
+ e.preventDefault();
+ if(!remessaAtual) return alert('Abra uma remessa');
+ entregas.push({
+  nome:nome.value,
+  endereco:endereco.value,
+  cep:cep.value,
+  prioridade:parseInt(prioridade.value,10),
+  distancia:0
+ });
+ formEntrega.reset();
+ atualizar();
+};
+
+function iniciarCorrida(){
+ if(entregas.length===0) return alert('Sem entregas');
+ corridaAtiva=true;alert('Corrida iniciada');
 }
 
-function abrirHistorico(){
-    const lista=document.getElementById('listaHistorico');
-    lista.innerHTML='';
-    historico.forEach((e,i)=>{
-        const div=document.createElement('div');
-        div.className='section';
-        div.innerHTML=`
-            <div class="actions">
-                <button class="btn-edit" onclick="editarHistorico(${i})">✏️</button>
-                <button class="btn-del" onclick="excluirHistorico(${i})">🗑️</button>
-            </div>
-            <strong>${e.nome}</strong><br>${e.endereco}<br>CEP: ${e.cep}<br><small>${e.data}</small>`;
-        lista.appendChild(div);
-    });
-    document.getElementById('modalHistorico').style.display='flex';
+function finalizarCorrida(){
+ corridaAtiva=false;alert('Corrida finalizada');
 }
 
-function editarHistorico(i){
-    const e=historico[i];
-    const nome=prompt('Nome',e.nome);
-    if(!nome) return;
-    e.nome=nome;
-    salvar();
-    abrirHistorico();
+function atualizarMapa(){
+ if(entregas.length===0) return;
+ const origem=posicaoAtual?`${posicaoAtual.lat},${posicaoAtual.lng}`:'';
+ const destinos=entregas.map(e=>encodeURIComponent(e.endereco+' '+e.cep)).join('/');
+ document.getElementById('mapa').src='https://www.google.com/maps/dir/'+origem+'/'+destinos+'?travelmode=driving&output=embed';
 }
 
-function excluirHistorico(i){
-    if(confirm('Excluir do histórico?')){
-        historico.splice(i,1);
-        salvar();
-        abrirHistorico();
-    }
+function iniciarRota(i){
+ const e=entregas[i];
+ const url='https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent(e.endereco+' '+e.cep)+'&travelmode=driving';
+ window.open(url,'_blank');
 }
 
-function fecharHistorico(){
-    document.getElementById('modalHistorico').style.display='none';
+function marcarEntregue(i){
+ if(!corridaAtiva) return alert('Inicie a corrida primeiro');
+ const e=entregas[i];
+ if(!remessaAtual) return;
+ remessaAtual.entregas.push({...e,status:'ENTREGUE',data:new Date().toLocaleString()});
+ entregas.splice(i,1);
+ atualizar();
 }
 
-function abrirMapa(end){
-    document.getElementById('map').src=`https://www.google.com/maps?q=${encodeURIComponent(end)}&output=embed`;
+function marcarDevolvido(i){
+ if(!corridaAtiva) return alert('Inicie a corrida primeiro');
+ const e=entregas[i];
+ if(!remessaAtual) return;
+ remessaAtual.entregas.push({...e,status:'DEVOLVIDO',data:new Date().toLocaleString()});
+ entregas.splice(i,1);
+ atualizar();
+}
+
+function finalizarRemessa(){
+ if(!remessaAtual) return;
+ remessaAtual.fim=new Date().toLocaleString();
+ remessaAtual.entregas=[...entregas];
+ remessas.push(remessaAtual);
+ entregas=[];
+ remessaAtual=null;
+ document.getElementById('remessaAtiva').innerHTML='';
+ salvar();
+}
+
+function gerarPDF(){
+ const {jsPDF}=window.jspdf;
+ const pdf=new jsPDF();
+ let y=10;
+ pdf.text('Relatório de Remessas',10,y);y+=10;
+ remessas.forEach((r,i)=>{
+  pdf.text(`Remessa ${i+1}`,10,y);y+=6;
+  pdf.text(`Início: ${r.inicio}`,10,y);y+=6;
+  pdf.text(`Fim: ${r.fim||'-'}`,10,y);y+=6;
+  const entregues=r.entregas||[];
+  pdf.text(`Total de registros: ${entregues.length}`,10,y);y+=6;
+  entregues.forEach((e,idx)=>{
+    pdf.text(`- ${e.nome} (${e.status})`,12,y);
+    y+=5;
+    if(y>280){pdf.addPage();y=10;}
+  });
+  y+=8;
+  if(y>280){pdf.addPage();y=10;}
+ });
+ pdf.save('relatorio_entregas.pdf');
 }
 
 function salvar(){
-    localStorage.setItem('entregas',JSON.stringify(entregas));
-    localStorage.setItem('historico',JSON.stringify(historico));
-    atualizarLista();
+ localStorage.setItem('remessas',JSON.stringify(remessas));
+ atualizar();
 }
 
-const formEntrega=document.getElementById('formEntrega');
-formEntrega.addEventListener('submit', ev=>{
-    ev.preventDefault();
-    const nomeVal=document.getElementById('nome').value;
-    const enderecoVal=document.getElementById('endereco').value;
-    const cepVal=document.getElementById('cep').value;
-    const prioridadeVal=parseInt(document.getElementById('prioridade').value);
-
-    entregas.push({
-        nome:nomeVal,
-        endereco:enderecoVal,
-        cep:cepVal,
-        prioridade:prioridadeVal
-    });
-    salvar();
-    formEntrega.reset();
-});
-
-atualizarLista();
+atualizar();
 </script>
 </body>
 </html>
