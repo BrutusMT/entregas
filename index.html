@@ -83,8 +83,22 @@ function obterLocalizacao(cb){
 }
 
 function abrirRemessa(){
- if(remessaAtual) return alert('Já existe remessa aberta');
- remessaAtual = { inicio: new Date().toLocaleString(), entregas: [] };
+  console.log('Abrir remessa acionado');
+  if(remessaAtual){
+    alert('Já existe remessa aberta');
+    return;
+  }
+  remessaAtual = {
+    inicio: new Date().toLocaleString(),
+    entregas: []
+  };
+  entregas = [];
+  const box = document.getElementById('remessaAtiva');
+  if(box){
+    box.innerText = '🟢 Remessa iniciada em ' + remessaAtual.inicio;
+  }
+  salvar();
+};
  entregas = [];
  document.getElementById('remessaAtiva').innerHTML = '🟢 Remessa iniciada em ' + remessaAtual.inicio;
  salvar();
@@ -173,9 +187,9 @@ function gerarPDF(){
 }
 
 function salvar(){
- localStorage.setItem('remessas',JSON.stringify(remessas));
- localStorage.setItem('entregasAtivas',JSON.stringify(entregas));
- atualizar();
+  localStorage.setItem('remessas', JSON.stringify(remessas));
+  localStorage.setItem('entregasAtivas', JSON.stringify(entregas));
+  atualizar();
 }
 
 function salvarSugestoes(v){
