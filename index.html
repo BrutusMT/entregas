@@ -17,10 +17,10 @@ button{background:var(--ok);color:#fff;font-weight:bold;cursor:pointer}
 .prioridade-alta{background:var(--alta)}
 .prioridade-media{background:var(--media)}
 .prioridade-baixa{background:var(--baixa)}
-iframe{width:100%;height:280px;border:none;border-radius:8px}
 .stats{display:flex;gap:10px;margin-bottom:15px}
 .stat{flex:1;background:#000;padding:10px;border-radius:6px;text-align:center}
 .small{font-size:11px;opacity:.8}
+a{color:#90caf9}
 </style>
 </head>
 <body>
@@ -57,14 +57,12 @@ iframe{width:100%;height:280px;border:none;border-radius:8px}
 <div class="cards" id="listaEntregas"></div>
 
 <div class="section">
- <h3>🗺️ Rota</h3>
- <div class="small">💡 Sugestão IA: análise automática das entregas pendentes para sugerir a próxima melhor parada</div>
- <button id="btnSugestaoIA" style="background:#3f51b5">🤖 Sugestão de entrega (IA)</button>
+ <h3>🗺️ Rotas & IA</h3>
+ <div class="small">🤖 Sugestão automática baseada em prioridade e proximidade estimada</div>
+ <button id="btnSugestaoIA" style="background:#3f51b5">Sugerir próxima entrega</button>
  <div id="sugestoesIA" class="small" style="margin-top:10px"></div>
- <button id="btnMaps">Gerar rota completa (mapa interno)</button>
- <button id="btnMapsExterno" style="background:#607d8b">🧭 Abrir no Google Maps</button>
- <button id="btnReordenar" style="background:#455a64">🔁 Reordenar por menor distância</button>
- <iframe id="mapa"></iframe>
+ <button id="btnMapsExterno" style="background:#607d8b">🧭 Abrir rota completa no Google Maps</button>
+ <button id="btnReordenar" style="background:#455a64">🔁 Reordenar por prioridade</button>
 </div>
 
 <div class="section">
@@ -90,7 +88,6 @@ const pendentes = document.getElementById('pendentes');
 const totalRemessas = document.getElementById('totalRemessas');
 const listaEntregas = document.getElementById('listaEntregas');
 const remessaAtiva = document.getElementById('remessaAtiva');
-const mapa = document.getElementById('mapa');
 const formEntrega = document.getElementById('formEntrega');
 const nome = document.getElementById('nome');
 const endereco = document.getElementById('endereco');
@@ -173,28 +170,19 @@ function entregar(i){
  salvar();
 }
 
-// ================= MAPAS =================
-
+// ================= IA & MAPS =================
 document.getElementById('btnSugestaoIA').onclick = ()=>{
  if(entregas.length===0){ alert('Nenhuma entrega pendente'); return; }
- // Simulação de IA: prioriza maior prioridade e menor texto de endereço
  const ordenadas = [...entregas].sort((a,b)=>{
   if(b.prioridade!==a.prioridade) return b.prioridade-a.prioridade;
   return a.endereco.length-b.endereco.length;
  });
  const div = document.getElementById('sugestoesIA');
- div.innerHTML = '<strong>📍 Próximas entregas sugeridas:</strong><br>';
+ div.innerHTML = '<strong>Próximas entregas sugeridas:</strong><br>';
  ordenadas.forEach((e,i)=>{
   const link = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(e.endereco)}`;
-  div.innerHTML += `${i+1}. ${e.nome} – <a href="${link}" target="_blank" style="color:#90caf9">${e.endereco}</a><br>`;
+  div.innerHTML += `${i+1}. ${e.nome} – <a href="${link}" target="_blank">${e.endereco}</a><br>`;
  });
-};
-
-document.getElementById('btnMaps').onclick = ()=>{
- if(!posicaoAtual){ alert('Localização atual não disponível'); return; }
- if(entregas.length===0){ alert('Nenhuma entrega'); return; }
- const pontos = entregas.map(e=>encodeURIComponent(e.endereco)).join('/');
- mapa.src = `https://www.google.com/maps/dir/${posicaoAtual.lat},${posicaoAtual.lng}/${pontos}?output=embed&travelmode=driving`;
 };
 
 document.getElementById('btnMapsExterno').onclick = ()=>{
@@ -206,21 +194,13 @@ document.getElementById('btnMapsExterno').onclick = ()=>{
 };
 
 document.getElementById('btnReordenar').onclick = ()=>{
- if(!posicaoAtual){ alert('Localização atual não disponível'); return; }
  if(entregas.length<2){ alert('Entregas insuficientes'); return; }
- // Heurística simples: prioridade DESC + proximidade (string length como fallback)
  entregas.sort((a,b)=>{
   if(b.prioridade!==a.prioridade) return b.prioridade-a.prioridade;
   return a.endereco.length-b.endereco.length;
  });
  salvar();
 };
-
-function abrirRotaEntrega(i){
- if(!posicaoAtual){ alert('Localização atual não disponível'); return; }
- const destino = encodeURIComponent(entregas[i].endereco);
- mapa.src = `https://www.google.com/maps/dir/${posicaoAtual.lat},${posicaoAtual.lng}/${destino}?output=embed&travelmode=driving`;
-}
 
 function abrirRotaEntregaExterna(i){
  if(!posicaoAtual){ alert('Localização atual não disponível'); return; }
@@ -239,9 +219,9 @@ document.getElementById('btnImprimir').onclick = ()=>{
 
 document.getElementById('btnEscolherRemessa').onclick = ()=>{
  if(remessas.length===0){ alert('Nenhuma remessa finalizada'); return; }
- const escolha = prompt('Digite o número da remessa disponível: ' + remessas.map(r=>r.numero).join(', '));
+ const escolha = prompt('Digite o número da remessa: ' + remessas.map(r=>r.numero).join(', '));
  const r = remessas.find(r=>r.numero==escolha);
- if(r) gerarPDF(r);
+ if(r) gerarPDF(r,'entregues');
 };
 
 function gerarPDF(r,tipo){
@@ -268,16 +248,15 @@ function atualizar(){
  pendentes.innerText = entregas.length;
  totalRemessas.innerText = remessas.length;
  listaEntregas.innerHTML='';
- remessaAtiva.innerText = remessaAtual ? `🟢 Remessa Nº ${remessaAtual.numero} aberta` : 'Nenhuma remessa aberta';
+ remessaAtiva.innerText = remessaAtual ? `Remessa Nº ${remessaAtual.numero} aberta` : 'Nenhuma remessa aberta';
  entregas.forEach((e,i)=>{
   const d=document.createElement('div');
   d.className='card prioridade-'+(e.prioridade==3?'alta':e.prioridade==2?'media':'baixa');
   d.innerHTML=`<strong>${i+1}. ${e.nome}</strong><br>${e.endereco}<br>CEP ${e.cep||'-'}<br>
-  <button onclick="editarEntrega(${i})">✏️ Editar</button>
-  <button onclick="abrirRotaEntrega(${i})" style="background:#607d8b">🚗 Rota interna</button>
-  <button onclick="abrirRotaEntregaExterna(${i})" style="background:#455a64">🧭 Maps</button>
-  <button onclick="excluirEntrega(${i})" style="background:#b71c1c">🗑️ Excluir</button>
-  <button onclick="entregar(${i})">✅ Entregue</button>`;
+  <button onclick="editarEntrega(${i})">Editar</button>
+  <button onclick="abrirRotaEntregaExterna(${i})" style="background:#455a64">Maps</button>
+  <button onclick="excluirEntrega(${i})" style="background:#b71c1c">Excluir</button>
+  <button onclick="entregar(${i})">Entregue</button>`;
   listaEntregas.appendChild(d);
  });
 }
