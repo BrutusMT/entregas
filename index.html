@@ -15,15 +15,10 @@ header{background:var(--header);padding:15px;text-align:center;font-size:20px;fo
 input,select,button{width:100%;padding:10px;margin-top:10px;border:none;border-radius:5px}
 button{background:var(--ok);color:#fff;font-weight:bold;cursor:pointer}
 .cards{display:flex;flex-direction:column;gap:10px}
-.card{padding:15px;border-radius:8px;position:relative}
+.card{padding:15px;border-radius:8px}
 .prioridade-alta{background:var(--alta)}
 .prioridade-media{background:var(--media)}
 .prioridade-baixa{background:var(--baixa)}
-.actions{position:absolute;top:10px;right:10px;display:flex;gap:5px}
-.actions button{width:auto;padding:5px 8px;font-size:12px}
-.btn-edit{background:var(--edit)}
-.btn-del{background:var(--del)}
-.btn-info{background:var(--info)}
 iframe{width:100%;height:280px;border:none;border-radius:8px}
 .stats{display:flex;gap:10px;margin-bottom:15px}
 .stat{flex:1;background:#000;padding:10px;border-radius:6px;text-align:center}
@@ -40,9 +35,11 @@ iframe{width:100%;height:280px;border:none;border-radius:8px}
 </div><div class="section">
   <h3>➕ Nova Entrega</h3>
   <form id="formEntrega">
-    <input id="nome" placeholder="Cliente" required>
-    <input id="endereco" placeholder="Endereço" required>
+    <input id="nome" placeholder="Dono do pacote" required>
+    <input id="endereco" placeholder="Endereço" list="sugestoesEnd" required>
+    <datalist id="sugestoesEnd"></datalist>
     <input id="cep" placeholder="CEP" required>
+    <button type="button" onclick="abrirScanner()">📷 Escanear CEP / Endereço</button>
     <select id="prioridade">
       <option value="3">Alta</option>
       <option value="2">Média</option>
@@ -57,111 +54,87 @@ iframe{width:100%;height:280px;border:none;border-radius:8px}
   <button onclick="finalizarRemessa()">✅ Finalizar Remessa</button>
   <button onclick="gerarPDF()">📄 Gerar Relatório PDF</button>
 </div>
+</div><!-- Scanner --><div id="scannerModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:#000;z-index:9999">
+  <video id="video" autoplay style="width:100%;height:100%;object-fit:cover"></video>
+  <button onclick="fecharScanner()" style="position:absolute;top:10px;right:10px;padding:10px">❌ Fechar</button>
 </div><script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script><script>
-let entregas=[];
+let entregas=JSON.parse(localStorage.getItem('entregasAtivas'))||[];
 let remessas=JSON.parse(localStorage.getItem('remessas'))||[];
 let remessaAtual=null;
 let posicaoAtual=null;
-let corridaAtiva=false;
+let stream=null;
 
 navigator.geolocation?.getCurrentPosition(p=>{
   posicaoAtual={lat:p.coords.latitude,lng:p.coords.longitude};
+  carregarSugestoes();
   atualizar();
 });
 
 function abrirRemessa(){
-  if(remessaAtual) return alert('Já existe remessa aberta');
-  remessaAtual={inicio:new Date().toLocaleString(),entregas:[]};
-  document.getElementById('remessaAtiva').innerHTML='🟢 Remessa iniciada em '+remessaAtual.inicio;
-}
-
-function calcularDistancia(lat1,lon1,lat2,lon2){
- const R=6371;
- const dLat=(lat2-lat1)*Math.PI/180;
- const dLon=(lon2-lon1)*Math.PI/180;
- const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
- return R*(2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a)));
-}
-
-function ordenarPorDistancia(){
- entregas.forEach(e=>{
-  if(typeof e.distancia!=="number"){
-    e.distancia=posicaoAtual ? Math.random()*10 : 0;
-  }
- });
- entregas.sort((a,b)=>a.distancia-b.distancia);
-}
-
-function atualizar(){
- document.getElementById('pendentes').textContent=entregas.length;
- document.getElementById('totalRemessas').textContent=remessas.length;
- ordenarPorDistancia();
- const lista=document.getElementById('listaEntregas');
- lista.innerHTML='';
- entregas.forEach((e,i)=>{
-  const dist=typeof e.distancia==='number' ? e.distancia.toFixed(2) : '0.00';
-  const div=document.createElement('div');
-  div.className='card prioridade-'+(e.prioridade==3?'alta':e.prioridade==2?'media':'baixa');
-  div.innerHTML=`<strong>${e.nome}</strong><br>${e.endereco}<br>CEP ${e.cep}<br>📍 ${dist} km<br>
-  <button onclick=\"iniciarRota(${i})\">🧭 Iniciar Rota</button>
-  <button onclick=\"marcarEntregue(${i})\">✅ Entregue</button>
-  <button onclick=\"marcarDevolvido(${i})\">↩️ Devolvido</button>`;
-  lista.appendChild(div);
- });
- atualizarMapa();
+ if(remessaAtual) return alert('Já existe remessa aberta');
+ remessaAtual={inicio:new Date().toLocaleString(),entregas:[]};
+ entregas=[];
+ document.getElementById('remessaAtiva').innerHTML='🟢 Remessa iniciada em '+remessaAtual.inicio;
+ salvar();
 }
 
 formEntrega.onsubmit=e=>{
  e.preventDefault();
  if(!remessaAtual) return alert('Abra uma remessa');
- entregas.push({
+ const nova={
   nome:nome.value,
   endereco:endereco.value,
   cep:cep.value,
-  prioridade:parseInt(prioridade.value,10),
-  distancia:0
- });
+  prioridade:parseInt(prioridade.value,10)
+ };
+ entregas.push(nova);
+ salvarSugestoes(nova.endereco);
  formEntrega.reset();
- atualizar();
+ salvar();
 };
 
+function atualizar(){
+ document.getElementById('pendentes').textContent=entregas.length;
+ document.getElementById('totalRemessas').textContent=remessas.length;
+ const lista=document.getElementById('listaEntregas');
+ lista.innerHTML='';
+ entregas.forEach((e,i)=>{
+  const div=document.createElement('div');
+  div.className='card prioridade-'+(e.prioridade==3?'alta':e.prioridade==2?'media':'baixa');
+  div.innerHTML=`<strong>${e.nome}</strong><br>${e.endereco}<br>CEP ${e.cep}<br>
+  <button onclick="marcarEntregue(${i})">✅ Entregue</button>
+  <button onclick="marcarDevolvido(${i})">↩️ Devolvido</button>`;
+  lista.appendChild(div);
+ });
+ atualizarMapa();
+}
 
 function atualizarMapa(){
  if(entregas.length===0) return;
- const origem=posicaoAtual?`${posicaoAtual.lat},${posicaoAtual.lng}`:'';
  const destinos=entregas.map(e=>encodeURIComponent(e.endereco+' '+e.cep)).join('/');
- document.getElementById('mapa').src='https://www.google.com/maps/dir/'+origem+'/'+destinos+'?travelmode=driving&output=embed';
-}
-
-function iniciarRota(i){
- const e=entregas[i];
- const url='https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent(e.endereco+' '+e.cep)+'&travelmode=driving';
- window.open(url,'_blank');
+ mapa.src='https://www.google.com/maps/dir/'+destinos+'?output=embed';
 }
 
 function marcarEntregue(i){
  const e=entregas[i];
- if(!remessaAtual) return;
  remessaAtual.entregas.push({...e,status:'ENTREGUE',data:new Date().toLocaleString()});
  entregas.splice(i,1);
- atualizar();
+ salvar();
 }
 
 function marcarDevolvido(i){
  const e=entregas[i];
- if(!remessaAtual) return;
  remessaAtual.entregas.push({...e,status:'DEVOLVIDO',data:new Date().toLocaleString()});
  entregas.splice(i,1);
- atualizar();
+ salvar();
 }
 
 function finalizarRemessa(){
- if(!remessaAtual) return;
+ if(!remessaAtual) return alert('Nenhuma remessa aberta');
  remessaAtual.fim=new Date().toLocaleString();
- remessaAtual.entregas=[...entregas];
  remessas.push(remessaAtual);
- entregas=[];
  remessaAtual=null;
+ entregas=[];
  document.getElementById('remessaAtiva').innerHTML='';
  salvar();
 }
@@ -175,28 +148,58 @@ function gerarPDF(){
   pdf.text(`Remessa ${i+1}`,10,y);y+=6;
   pdf.text(`Início: ${r.inicio}`,10,y);y+=6;
   pdf.text(`Fim: ${r.fim||'-'}`,10,y);y+=6;
-  const regs=r.entregas||[];
-  pdf.text(`Total de registros: ${regs.length}`,10,y);y+=6;
-  regs.forEach((e)=>{
-    pdf.text(`- ${e.nome} | ${e.endereco} | ${e.status}`,12,y);
-    y+=5;
-    if(y>280){pdf.addPage();y=10;}
+  r.entregas.forEach(e=>{
+   pdf.text(`- ${e.nome} | ${e.endereco} | ${e.status}`,12,y);
+   y+=5;
+   if(y>280){pdf.addPage();y=10;}
   });
   y+=8;
-  if(y>280){pdf.addPage();y=10;}
- });
- pdf.save('relatorio_entregas.pdf');
-}
-  });
-  y+=8;
-  if(y>280){pdf.addPage();y=10;}
  });
  pdf.save('relatorio_entregas.pdf');
 }
 
 function salvar(){
  localStorage.setItem('remessas',JSON.stringify(remessas));
+ localStorage.setItem('entregasAtivas',JSON.stringify(entregas));
  atualizar();
+}
+
+function salvarSugestoes(end){
+ let s=JSON.parse(localStorage.getItem('sugestoesEnd'))||[];
+ if(!s.includes(end)) s.push(end);
+ localStorage.setItem('sugestoesEnd',JSON.stringify(s));
+ carregarSugestoes();
+}
+
+function carregarSugestoes(){
+ const dl=document.getElementById('sugestoesEnd');
+ const s=JSON.parse(localStorage.getItem('sugestoesEnd'))||[];
+ dl.innerHTML='';
+ s.forEach(v=>{const o=document.createElement('option');o.value=v;dl.appendChild(o);});
+}
+
+async function abrirScanner(){
+ if(!('BarcodeDetector' in window)) return alert('Scanner não suportado');
+ scannerModal.style.display='block';
+ stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
+ video.srcObject=stream;
+ const detector=new BarcodeDetector({formats:['qr_code']});
+ const scan=async()=>{
+  const codes=await detector.detect(video);
+  if(codes.length){
+   const txt=codes[0].rawValue;
+   const cepMatch=txt.match(/\d{5}-?\d{3}/);
+   if(cepMatch) cep.value=cepMatch[0];
+   endereco.value=txt;
+   fecharScanner();
+  } else requestAnimationFrame(scan);
+ };
+ scan();
+}
+
+function fecharScanner(){
+ scannerModal.style.display='none';
+ if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}
 }
 
 atualizar();
