@@ -2,12 +2,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Rota Prioritária – App de Entregas</title><style>
-:root{
-    --bg:#121212;--card:#1e1e1e;--header:#1f1f1f;
-    --alta:#b71c1c;--media:#f57f17;--baixa:#1b5e20;
-    --ok:#4caf50;--edit:#1976d2;--del:#c62828;--info:#455a64;
-}
+<title>Rota Prioritária – App de Entregas</title>
+<style>
+:root{--bg:#121212;--card:#1e1e1e;--header:#1f1f1f;--alta:#b71c1c;--media:#f57f17;--baixa:#1b5e20;--ok:#4caf50}
 body{margin:0;font-family:Arial;background:var(--bg);color:#fff}
 header{background:var(--header);padding:15px;text-align:center;font-size:20px;font-weight:bold}
 .container{padding:15px}
@@ -22,236 +19,82 @@ button{background:var(--ok);color:#fff;font-weight:bold;cursor:pointer}
 iframe{width:100%;height:280px;border:none;border-radius:8px}
 .stats{display:flex;gap:10px;margin-bottom:15px}
 .stat{flex:1;background:#000;padding:10px;border-radius:6px;text-align:center}
-</style></head>
+</style>
+</head>
 <body>
 <header>🚚 Rota Prioritária – Entregador</header>
-<div class="container"><div class="stats">
-  <div class="stat">⏳ Pendentes<br><strong id="pendentes">0</strong></div>
-  <div class="stat">📦 Remessas<br><strong id="totalRemessas">0</strong></div>
-</div><div class="section">
-  <h3>📦 Abertura de Remessa</h3>
-  <button onclick="abrirRemessa()">Abrir nova remessa</button>
-  <div id="remessaAtiva"></div>
-</div><div class="section">
-  <h3>➕ Nova Entrega</h3>
-  <form id="formEntrega">
-    <input id="nome" placeholder="Dono do pacote" required>
-    <input id="endereco" placeholder="Endereço" list="sugestoesEnd" required>
-    <datalist id="sugestoesEnd"></datalist>
-    <input id="cep" placeholder="CEP" required>
-    <button type="button" onclick="abrirScanner()">📷 Escanear CEP / Endereço</button>
-    <select id="prioridade">
-      <option value="3">Alta</option>
-      <option value="2">Média</option>
-      <option value="1">Baixa</option>
-    </select>
-    <button type="submit">Adicionar</button>
-  </form>
-</div><div class="cards" id="listaEntregas"></div><div class="section">
-  <h3>🚀 Jornada Selecionada</h3>
-  <button onclick="iniciarJornadaSelecionada()">Iniciar Jornada da Seleção</button>
-</div><div class="section">
-  <h3>🗺️ Mapa da Rota</h3>
-  <button onclick="iniciarJornadaMaps()">🚀 Iniciar Jornada no Google Maps</button>
-  <iframe id="mapa"></iframe>
-</div><div class="section">
-  <button onclick="finalizarRemessa()">✅ Finalizar Remessa</button>
-  <button onclick="gerarPDF()">📄 Gerar Relatório PDF</button>
+<div class="container">
+<div class="stats">
+ <div class="stat">⏳ Pendentes<br><strong id="pendentes">0</strong></div>
+ <div class="stat">📦 Remessas<br><strong id="totalRemessas">0</strong></div>
 </div>
-</div><!-- Scanner --><div id="scannerModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:#000;z-index:9999">
-  <video id="video" autoplay style="width:100%;height:100%;object-fit:cover"></video>
-  <button onclick="fecharScanner()" style="position:absolute;top:10px;right:10px;padding:10px">❌ Fechar</button>
-</div><script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script><script>
+<div class="section">
+ <h3>📦 Abertura de Remessa</h3>
+ <button onclick="abrirRemessa()">Abrir nova remessa</button>
+ <div id="remessaAtiva"></div>
+</div>
+<div class="section">
+ <h3>➕ Nova Entrega</h3>
+ <form id="formEntrega">
+  <input id="nome" placeholder="Dono do pacote" required>
+  <input id="endereco" placeholder="Endereço" list="sugestoesEnd" required>
+  <datalist id="sugestoesEnd"></datalist>
+  <input id="cep" placeholder="CEP" required>
+  <button type="button" onclick="abrirScanner()">📷 Escanear CEP / Endereço</button>
+  <select id="prioridade">
+   <option value="3">Alta</option>
+   <option value="2">Média</option>
+   <option value="1">Baixa</option>
+  </select>
+  <button type="submit">Adicionar</button>
+ </form>
+</div>
+<div class="cards" id="listaEntregas"></div>
+<div class="section">
+ <h3>🗺️ Mapa da Rota</h3>
+ <button onclick="iniciarJornadaMaps()">🚀 Iniciar Jornada no Google Maps</button>
+ <iframe id="mapa"></iframe>
+</div>
+<div class="section">
+ <button onclick="finalizarRemessa()">✅ Finalizar Remessa</button>
+ <button onclick="gerarPDF()">📄 Gerar Relatório PDF</button>
+</div>
+</div>
+<div id="scannerModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:#000;z-index:9999">
+ <video id="video" autoplay style="width:100%;height:100%;object-fit:cover"></video>
+ <button onclick="fecharScanner()" style="position:absolute;top:10px;right:10px">❌</button>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
 let entregas=JSON.parse(localStorage.getItem('entregasAtivas'))||[];
-let selecionadas=[];(localStorage.getItem('entregasAtivas'))||[];
 let remessas=JSON.parse(localStorage.getItem('remessas'))||[];
 let remessaAtual=null;
-let posicaoAtual=null; // localização do entregador sempre como ponto inicial
-let stream=null;
+let posicaoAtual=null;
+let stream=null;function obterLocalizacao(cb){ navigator.geolocation.getCurrentPosition(p=>{ posicaoAtual={lat:p.coords.latitude,lng:p.coords.longitude}; if(cb)cb(); },()=>alert('Permita o acesso à localização')); }
 
-function obterLocalizacao(callback){
- navigator.geolocation.getCurrentPosition(p=>{
-  posicaoAtual={lat:p.coords.latitude,lng:p.coords.longitude};
-  if(callback) callback();
- },()=>alert('Permita o acesso à localização'));
-}
+function abrirRemessa(){ if(remessaAtual)return alert('Já existe remessa aberta'); remessaAtual={inicio:new Date().toLocaleString(),entregas:[]}; entregas=[]; document.getElementById('remessaAtiva').innerText='🟢 Remessa iniciada em '+remessaAtual.inicio; salvar(); }
 
-obterLocalizacao(()=>{
- carregarSugestoes();
- atualizar();
-});
+formEntrega.onsubmit=e=>{ e.preventDefault(); if(!remessaAtual)return alert('Abra uma remessa'); const nova={nome:nome.value,endereco:endereco.value,cep:cep.value,prioridade:+prioridade.value}; entregas.push(nova); salvarSugestoes(nova.endereco); formEntrega.reset(); salvar(); };
 
-function abrirRemessa(){
- if(remessaAtual) return alert('Já existe remessa aberta');
- remessaAtual={inicio:new Date().toLocaleString(),entregas:[]};
- entregas=[];
- document.getElementById('remessaAtiva').innerHTML='🟢 Remessa iniciada em '+remessaAtual.inicio;
- salvar();
-}
+function atualizar(){ pendentes.textContent=entregas.length; totalRemessas.textContent=remessas.length; listaEntregas.innerHTML=''; entregas.forEach((e,i)=>{ const d=document.createElement('div'); d.className='card prioridade-'+(e.prioridade==3?'alta':e.prioridade==2?'media':'baixa'); d.innerHTML=<strong>${e.nome}</strong><br>${e.endereco}<br>CEP ${e.cep}<br> <button onclick="marcarEntregue(${i})">✅ Entregue</button> <button onclick="marcarDevolvido(${i})">↩️ Devolvido</button>; listaEntregas.appendChild(d); }); atualizarMapa(); }
 
-formEntrega.onsubmit=e=>{
- e.preventDefault();
- if(!remessaAtual) return alert('Abra uma remessa');
- const nova={
-  nome:nome.value,
-  endereco:endereco.value,
-  cep:cep.value,
-  prioridade:parseInt(prioridade.value,10)
- };
- entregas.push(nova);
- salvarSugestoes(nova.endereco);
- formEntrega.reset();
- salvar();
-};
+function iniciarJornadaMaps(){ if(!entregas.length)return alert('Nenhuma entrega'); obterLocalizacao(()=>{ const origem=${posicaoAtual.lat},${posicaoAtual.lng}; const destinos=entregas.map(e=>encodeURIComponent(e.endereco+' '+e.cep)).join('/'); window.open(https://www.google.com/maps/dir/${origem}/${destinos},'_blank'); }); }
 
-function atualizar(){
- document.getElementById('pendentes').textContent=entregas.length;
- document.getElementById('totalRemessas').textContent=remessas.length;
- const lista=document.getElementById('listaEntregas');
- lista.innerHTML='';
- entregas.forEach((e,i)=>{
-  const div=document.createElement('div');
-  div.className='card prioridade-'+(e.prioridade==3?'alta':e.prioridade==2?'media':'baixa');
-  div.innerHTML=`<input type="checkbox" onchange="toggleSelecionada(${i})"> <strong>${e.nome}</strong><br>${e.endereco}<br>CEP ${e.cep}<br>
-  <button onclick="marcarEntregue(${i})">✅ Entregue</button>
-  <button onclick="marcarDevolvido(${i})">↩️ Devolvido</button>`;
-  lista.appendChild(div);
- });
- atualizarMapa();
-}
+function atualizarMapa(){ if(!entregas.length||!posicaoAtual)return; const origem=${posicaoAtual.lat},${posicaoAtual.lng}; const destinos=entregas.map(e=>encodeURIComponent(e.endereco+' '+e.cep)).join('/'); mapa.src=https://www.google.com/maps/dir/${origem}/${destinos}?output=embed; }
 
-function iniciarJornadaMaps(){
- if(entregas.length===0){alert('Nenhuma entrega pendente');return;}
- obterLocalizacao(()=>{
-  const origem=posicaoAtual.lat+','+posicaoAtual.lng;
-  const destinos=entregas.map(e=>encodeURIComponent(e.endereco+' '+e.cep)).join('/');
-  const url='https://www.google.com/maps/dir/'+origem+'/'+destinos;
-  window.open(url,'_blank');
- });
-}
- const destinos=entregas.map(e=>encodeURIComponent(e.endereco+' '+e.cep)).join('/');
- const url='https://www.google.com/maps/dir/'+destinos;
- window.open(url,'_blank');
-}
+function marcarEntregue(i){ remessaAtual.entregas.push({...entregas[i],status:'ENTREGUE',data:new Date().toLocaleString()}); entregas.splice(i,1);salvar(); } function marcarDevolvido(i){ remessaAtual.entregas.push({...entregas[i],status:'DEVOLVIDO',data:new Date().toLocaleString()}); entregas.splice(i,1);salvar(); }
 
-function toggleSelecionada(i){
- if(selecionadas.includes(i)){
-  selecionadas=selecionadas.filter(x=>x!==i);
- } else selecionadas.push(i);
-}
+function finalizarRemessa(){ if(!remessaAtual)return; remessaAtual.fim=new Date().toLocaleString(); remessas.push(remessaAtual); remessaAtual=null;entregas=[]; remessaAtiva.innerText='';salvar(); }
 
-function iniciarJornadaSelecionada(){
- if(selecionadas.length===0){alert('Nenhuma entrega selecionada');return;}
- obterLocalizacao(()=>{
-  const origem=posicaoAtual.lat+','+posicaoAtual.lng;
-  const destinos=selecionadas.map(i=>{
-   const e=entregas[i];
-   return encodeURIComponent(e.endereco+' '+e.cep);
-  }).join('/');
-  window.open('https://www.google.com/maps/dir/'+origem+'/'+destinos,'_blank');
- });
-}
- const destinos=selecionadas.map(i=>{
-  const e=entregas[i];
-  return encodeURIComponent(e.endereco+' '+e.cep);
- }).join('/');
- window.open('https://www.google.com/maps/dir/'+destinos,'_blank');
-}
+function gerarPDF(){ const {jsPDF}=window.jspdf;const pdf=new jsPDF();let y=10; pdf.text('Relatório de Remessas',10,y);y+=10; remessas.forEach((r,i)=>{ pdf.text(Remessa ${i+1},10,y);y+=6; pdf.text(Início: ${r.inicio},10,y);y+=6; pdf.text(Fim: ${r.fim},10,y);y+=6; r.entregas.forEach(e=>{pdf.text(- ${e.nome} | ${e.endereco} | ${e.status},12,y);y+=5;}); y+=8; }); pdf.save('relatorio_entregas.pdf'); }
 
-function atualizarMapa(){
- if(entregas.length===0 || !posicaoAtual) return;
- const origem=posicaoAtual.lat+','+posicaoAtual.lng;
- const destinos=entregas.map(e=>encodeURIComponent(e.endereco+' '+e.cep)).join('/');
- mapa.src='https://www.google.com/maps/dir/'+origem+'/'+destinos+'?output=embed';
-}
+function salvar(){ localStorage.setItem('remessas',JSON.stringify(remessas)); localStorage.setItem('entregasAtivas',JSON.stringify(entregas)); atualizar(); }
 
-function marcarEntregue(i){
- const e=entregas[i];
- remessaAtual.entregas.push({...e,status:'ENTREGUE',data:new Date().toLocaleString()});
- entregas.splice(i,1);
- salvar();
-}
+function salvarSugestoes(v){ const s=JSON.parse(localStorage.getItem('sugestoesEnd'))||[]; if(!s.includes(v))s.push(v); localStorage.setItem('sugestoesEnd',JSON.stringify(s)); carregarSugestoes(); } function carregarSugestoes(){ sugestoesEnd.innerHTML=''; (JSON.parse(localStorage.getItem('sugestoesEnd'))||[]).forEach(v=>{const o=document.createElement('option');o.value=v;sugestoesEnd.appendChild(o);}); }
 
-function marcarDevolvido(i){
- const e=entregas[i];
- remessaAtual.entregas.push({...e,status:'DEVOLVIDO',data:new Date().toLocaleString()});
- entregas.splice(i,1);
- salvar();
-}
+async function abrirScanner(){ if(!('BarcodeDetector'in window))return alert('Scanner não suportado'); scannerModal.style.display='block'; stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}}); video.srcObject=stream; const det=new BarcodeDetector({formats:['qr_code']}); const scan=async()=>{const c=await det.detect(video);if(c.length){endereco.value=c[0].rawValue;fecharScanner();}else requestAnimationFrame(scan)};scan(); } function fecharScanner(){scannerModal.style.display='none';if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}}
 
-function finalizarRemessa(){
- if(!remessaAtual) return alert('Nenhuma remessa aberta');
- remessaAtual.fim=new Date().toLocaleString();
- remessas.push(remessaAtual);
- remessaAtual=null;
- entregas=[];
- document.getElementById('remessaAtiva').innerHTML='';
- salvar();
-}
+obterLocalizacao(()=>{carregarSugestoes();atualizar();}); </script>
 
-function gerarPDF(){
- const {jsPDF}=window.jspdf;
- const pdf=new jsPDF();
- let y=10;
- pdf.text('Relatório de Remessas',10,y);y+=10;
- remessas.forEach((r,i)=>{
-  pdf.text(`Remessa ${i+1}`,10,y);y+=6;
-  pdf.text(`Início: ${r.inicio}`,10,y);y+=6;
-  pdf.text(`Fim: ${r.fim||'-'}`,10,y);y+=6;
-  r.entregas.forEach(e=>{
-   pdf.text(`- ${e.nome} | ${e.endereco} | ${e.status}`,12,y);
-   y+=5;
-   if(y>280){pdf.addPage();y=10;}
-  });
-  y+=8;
- });
- pdf.save('relatorio_entregas.pdf');
-}
-
-function salvar(){
- localStorage.setItem('remessas',JSON.stringify(remessas));
- localStorage.setItem('entregasAtivas',JSON.stringify(entregas));
- atualizar();
-}
-
-function salvarSugestoes(end){
- let s=JSON.parse(localStorage.getItem('sugestoesEnd'))||[];
- if(!s.includes(end)) s.push(end);
- localStorage.setItem('sugestoesEnd',JSON.stringify(s));
- carregarSugestoes();
-}
-
-function carregarSugestoes(){
- const dl=document.getElementById('sugestoesEnd');
- const s=JSON.parse(localStorage.getItem('sugestoesEnd'))||[];
- dl.innerHTML='';
- s.forEach(v=>{const o=document.createElement('option');o.value=v;dl.appendChild(o);});
-}
-
-async function abrirScanner(){
- if(!('BarcodeDetector' in window)) return alert('Scanner não suportado');
- scannerModal.style.display='block';
- stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
- video.srcObject=stream;
- const detector=new BarcodeDetector({formats:['qr_code']});
- const scan=async()=>{
-  const codes=await detector.detect(video);
-  if(codes.length){
-   const txt=codes[0].rawValue;
-   const cepMatch=txt.match(/\d{5}-?\d{3}/);
-   if(cepMatch) cep.value=cepMatch[0];
-   endereco.value=txt;
-   fecharScanner();
-  } else requestAnimationFrame(scan);
- };
- scan();
-}
-
-function fecharScanner(){
- scannerModal.style.display='none';
- if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}
-}
-
-atualizar();
-</script></body>
+</body>
 </html>
