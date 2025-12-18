@@ -1,0 +1,30 @@
+async function abrirScanner(){
+ scannerModal.style.display='block';
+ stream = await navigator.mediaDevices.getUserMedia({
+   video:{facingMode:'environment'}
+ });
+ video.srcObject = stream;
+}
+
+async function capturarOCR(){
+ const canvas = document.createElement('canvas');
+ canvas.width = video.videoWidth;
+ canvas.height = video.videoHeight;
+ canvas.getContext('2d').drawImage(video,0,0);
+
+ const { data:{ text } } = await Tesseract.recognize(canvas,'por');
+
+ const cepMatch = text.match(/\d{5}-?\d{3}/);
+ if(cepMatch) cep.value = cepMatch[0];
+
+ endereco.value = text.replace(/\n/g,' ').trim();
+ fecharScanner();
+}
+
+function fecharScanner(){
+ scannerModal.style.display='none';
+ if(stream){
+   stream.getTracks().forEach(t=>t.stop());
+   stream=null;
+ }
+}
