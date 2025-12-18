@@ -1,11 +1,8 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
+<!DOCTYPE html><html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Rota Prioritária – App de Entregas</title>
-
-<style>
+<title>Rota Prioritária – App de Entregas</title><style>
 :root{
     --bg:#121212;--card:#1e1e1e;--header:#1f1f1f;
     --alta:#b71c1c;--media:#f57f17;--baixa:#1b5e20;
@@ -30,24 +27,17 @@ button{background:var(--ok);color:#fff;font-weight:bold;cursor:pointer}
 iframe{width:100%;height:280px;border:none;border-radius:8px}
 .stats{display:flex;gap:10px;margin-bottom:15px}
 .stat{flex:1;background:#000;padding:10px;border-radius:6px;text-align:center}
-</style>
-</head>
+</style></head>
 <body>
 <header>🚚 Rota Prioritária – Entregador</header>
-<div class="container">
-
-<div class="stats">
+<div class="container"><div class="stats">
   <div class="stat">⏳ Pendentes<br><strong id="pendentes">0</strong></div>
   <div class="stat">📦 Remessas<br><strong id="totalRemessas">0</strong></div>
-</div>
-
-<div class="section">
+</div><div class="section">
   <h3>📦 Abertura de Remessa</h3>
   <button onclick="abrirRemessa()">Abrir nova remessa</button>
   <div id="remessaAtiva"></div>
-</div>
-
-<div class="section">
+</div><div class="section">
   <h3>➕ Nova Entrega</h3>
   <form id="formEntrega">
     <input id="nome" placeholder="Cliente" required>
@@ -60,29 +50,14 @@ iframe{width:100%;height:280px;border:none;border-radius:8px}
     </select>
     <button type="submit">Adicionar</button>
   </form>
-</div>
-
-<div class="section">
-  <h3>🏁 Corrida</h3>
-  <button onclick="iniciarCorrida()">▶️ Iniciar Corrida</button>
-  <button onclick="finalizarCorrida()">⏹️ Finalizar Corrida</button>
-</div>
-
-<div class="cards" id="listaEntregas"></div>
-
-<div class="section">
+</div><div class="cards" id="listaEntregas"></div><div class="section">
   <h3>🗺️ Mapa da Rota</h3>
   <iframe id="mapa"></iframe>
-</div>
-
-<div class="section">
+</div><div class="section">
   <button onclick="finalizarRemessa()">✅ Finalizar Remessa</button>
   <button onclick="gerarPDF()">📄 Gerar Relatório PDF</button>
 </div>
-</div>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script>
+</div><script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script><script>
 let entregas=[];
 let remessas=JSON.parse(localStorage.getItem('remessas'))||[];
 let remessaAtual=null;
@@ -150,14 +125,6 @@ formEntrega.onsubmit=e=>{
  atualizar();
 };
 
-function iniciarCorrida(){
- if(entregas.length===0) return alert('Sem entregas');
- corridaAtiva=true;alert('Corrida iniciada');
-}
-
-function finalizarCorrida(){
- corridaAtiva=false;alert('Corrida finalizada');
-}
 
 function atualizarMapa(){
  if(entregas.length===0) return;
@@ -173,7 +140,6 @@ function iniciarRota(i){
 }
 
 function marcarEntregue(i){
- if(!corridaAtiva) return alert('Inicie a corrida primeiro');
  const e=entregas[i];
  if(!remessaAtual) return;
  remessaAtual.entregas.push({...e,status:'ENTREGUE',data:new Date().toLocaleString()});
@@ -182,7 +148,6 @@ function marcarEntregue(i){
 }
 
 function marcarDevolvido(i){
- if(!corridaAtiva) return alert('Inicie a corrida primeiro');
  const e=entregas[i];
  if(!remessaAtual) return;
  remessaAtual.entregas.push({...e,status:'DEVOLVIDO',data:new Date().toLocaleString()});
@@ -210,12 +175,18 @@ function gerarPDF(){
   pdf.text(`Remessa ${i+1}`,10,y);y+=6;
   pdf.text(`Início: ${r.inicio}`,10,y);y+=6;
   pdf.text(`Fim: ${r.fim||'-'}`,10,y);y+=6;
-  const entregues=r.entregas||[];
-  pdf.text(`Total de registros: ${entregues.length}`,10,y);y+=6;
-  entregues.forEach((e,idx)=>{
-    pdf.text(`- ${e.nome} (${e.status})`,12,y);
+  const regs=r.entregas||[];
+  pdf.text(`Total de registros: ${regs.length}`,10,y);y+=6;
+  regs.forEach((e)=>{
+    pdf.text(`- ${e.nome} | ${e.endereco} | ${e.status}`,12,y);
     y+=5;
     if(y>280){pdf.addPage();y=10;}
+  });
+  y+=8;
+  if(y>280){pdf.addPage();y=10;}
+ });
+ pdf.save('relatorio_entregas.pdf');
+}
   });
   y+=8;
   if(y>280){pdf.addPage();y=10;}
@@ -229,6 +200,5 @@ function salvar(){
 }
 
 atualizar();
-</script>
-</body>
+</script></body>
 </html>
