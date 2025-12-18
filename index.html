@@ -60,21 +60,25 @@ iframe{width:100%;height:280px;border:none;border-radius:8px}
 </div>
 </div><!-- Scanner --><div id="scannerModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:#000;z-index:9999">
   <video id="video" autoplay style="width:100%;height:100%;object-fit:cover"></video>
-  <button onclick="capturarOCR()" style="position:absolute;bottom:20px;left:20px;padding:12px">📸 Capturar</button>
-  <button onclick="capturarOCR()" style="position:absolute;bottom:20px;left:20px;padding:12px">📸 Capturar</button>
   <button onclick="fecharScanner()" style="position:absolute;top:10px;right:10px;padding:10px">❌ Fechar</button>
-</div><script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script><script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script><script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script><script>
+</div><script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script><script>
 let entregas=JSON.parse(localStorage.getItem('entregasAtivas'))||[];
 let selecionadas=[];(localStorage.getItem('entregasAtivas'))||[];
 let remessas=JSON.parse(localStorage.getItem('remessas'))||[];
 let remessaAtual=null;
-let posicaoAtual=null;
+let posicaoAtual=null; // localização do entregador sempre como ponto inicial
 let stream=null;
 
-navigator.geolocation?.getCurrentPosition(p=>{
+function obterLocalizacao(callback){
+ navigator.geolocation.getCurrentPosition(p=>{
   posicaoAtual={lat:p.coords.latitude,lng:p.coords.longitude};
-  carregarSugestoes();
-  atualizar();
+  if(callback) callback();
+ },()=>alert('Permita o acesso à localização'));
+}
+
+obterLocalizacao(()=>{
+ carregarSugestoes();
+ atualizar();
 });
 
 function abrirRemessa(){
@@ -100,26 +104,10 @@ formEntrega.onsubmit=e=>{
  salvar();
 };
 
-function ordenarEntregas(){
- entregas.sort((a,b)=>{
-  if(a.prioridade!==b.prioridade) return b.prioridade-a.prioridade;
-  return (a.cep||'').localeCompare(b.cep||'');
- });
-}
-
-function ordenarEntregas(){
- entregas.sort((a,b)=>{
-  if(a.prioridade!==b.prioridade) return b.prioridade-a.prioridade;
-  return (a.cep||'').localeCompare(b.cep||'');
- });
-}
-
 function atualizar(){
  document.getElementById('pendentes').textContent=entregas.length;
  document.getElementById('totalRemessas').textContent=remessas.length;
  const lista=document.getElementById('listaEntregas');
- ordenarEntregas();
- ordenarEntregas();
  lista.innerHTML='';
  entregas.forEach((e,i)=>{
   const div=document.createElement('div');
@@ -134,6 +122,13 @@ function atualizar(){
 
 function iniciarJornadaMaps(){
  if(entregas.length===0){alert('Nenhuma entrega pendente');return;}
+ obterLocalizacao(()=>{
+  const origem=posicaoAtual.lat+','+posicaoAtual.lng;
+  const destinos=entregas.map(e=>encodeURIComponent(e.endereco+' '+e.cep)).join('/');
+  const url='https://www.google.com/maps/dir/'+origem+'/'+destinos;
+  window.open(url,'_blank');
+ });
+}
  const destinos=entregas.map(e=>encodeURIComponent(e.endereco+' '+e.cep)).join('/');
  const url='https://www.google.com/maps/dir/'+destinos;
  window.open(url,'_blank');
@@ -147,6 +142,15 @@ function toggleSelecionada(i){
 
 function iniciarJornadaSelecionada(){
  if(selecionadas.length===0){alert('Nenhuma entrega selecionada');return;}
+ obterLocalizacao(()=>{
+  const origem=posicaoAtual.lat+','+posicaoAtual.lng;
+  const destinos=selecionadas.map(i=>{
+   const e=entregas[i];
+   return encodeURIComponent(e.endereco+' '+e.cep);
+  }).join('/');
+  window.open('https://www.google.com/maps/dir/'+origem+'/'+destinos,'_blank');
+ });
+}
  const destinos=selecionadas.map(i=>{
   const e=entregas[i];
   return encodeURIComponent(e.endereco+' '+e.cep);
@@ -155,9 +159,10 @@ function iniciarJornadaSelecionada(){
 }
 
 function atualizarMapa(){
- if(entregas.length===0) return;
+ if(entregas.length===0 || !posicaoAtual) return;
+ const origem=posicaoAtual.lat+','+posicaoAtual.lng;
  const destinos=entregas.map(e=>encodeURIComponent(e.endereco+' '+e.cep)).join('/');
- mapa.src='https://www.google.com/maps/dir/'+destinos+'?output=embed';
+ mapa.src='https://www.google.com/maps/dir/'+origem+'/'+destinos+'?output=embed';
 }
 
 function marcarEntregue(i){
@@ -240,25 +245,6 @@ async function abrirScanner(){
   } else requestAnimationFrame(scan);
  };
  scan();
-}
-
-async function abrirScanner(){
- scannerModal.style.display='block';
- stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
- video.srcObject=stream;
-}
-
-async function capturarOCR(){
- const canvas=document.createElement('canvas');
- canvas.width=video.videoWidth;
- canvas.height=video.videoHeight;
- const ctx=canvas.getContext('2d');
- ctx.drawImage(video,0,0);
- const { data:{ text } } = await Tesseract.recognize(canvas,'por');
- const cepMatch=text.match(/d{5}-?d{3}/);
- if(cepMatch) cep.value=cepMatch[0];
- endereco.value=text.replace(/n/g,' ').trim();
- fecharScanner();
 }
 
 function fecharScanner(){
