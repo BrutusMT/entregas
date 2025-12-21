@@ -45,6 +45,8 @@ a{color:#90caf9}
   <input id="nome" placeholder="Dono do pacote" required>
   <input id="endereco" placeholder="Endereço" required>
   <input id="cep" placeholder="CEP (opcional)">
+  <input id="obs" placeholder="Observação (opcional)">
+  <input id="telefone" placeholder="Telefone / WhatsApp (opcional)">
   <select id="prioridade">
    <option value="3">Alta</option>
    <option value="2">Média</option>
@@ -54,6 +56,7 @@ a{color:#90caf9}
  </form>
 </div>
 
+<input id="pesquisa" placeholder="🔍 Pesquisar por nome" style="margin-bottom:10px">
 <div class="cards" id="listaEntregas"></div>
 
 <div class="section">
@@ -93,6 +96,9 @@ const nome = document.getElementById('nome');
 const endereco = document.getElementById('endereco');
 const cep = document.getElementById('cep');
 const prioridade = document.getElementById('prioridade');
+const obs = document.getElementById('obs');
+const telefone = document.getElementById('telefone');
+const pesquisa = document.getElementById('pesquisa');
 
 // ================= LOCALIZAÇÃO =================
 function obterLocalizacao(cb){
@@ -142,19 +148,41 @@ document.getElementById('btnExcluirRemessa').onclick = ()=>{
 formEntrega.onsubmit = e =>{
  e.preventDefault();
  if(!remessaAtual){ alert('Abra uma remessa primeiro'); return; }
- entregas.push({ nome:nome.value, endereco:endereco.value, cep:cep.value||'', prioridade:+prioridade.value });
+
+ let tel = telefone.value.replace(/\D/g,'');
+ if(tel && !tel.startsWith('55')) tel = '55' + tel;
+
+ entregas.push({
+  nome: nome.value,
+  endereco: endereco.value,
+  cep: cep.value || '',
+  obs: obs.value || '',
+  telefone: tel || '',
+  prioridade: +prioridade.value
+ });
+
  formEntrega.reset();
  salvar();
 };
 
 function editarEntrega(i){
  const e = entregas[i];
+ if(!confirm('Deseja editar esta entrega?')) return;
+
  const novoEndereco = prompt('Editar endereço:', e.endereco);
- const novoCep = prompt('Editar CEP:', e.cep);
+ const novoTelefone = prompt('Editar telefone / WhatsApp:', e.telefone||'');
+ const novaObs = prompt('Editar observação:', e.obs||'');
+
+ let telEdit = novoTelefone ? novoTelefone.replace(/\D/g,'') : '';
+ if(telEdit && !telEdit.startsWith('55')) telEdit = '55' + telEdit;
+
  if(novoEndereco!==null) e.endereco = novoEndereco;
- if(novoCep!==null) e.cep = novoCep;
+ if(novaObs!==null) e.obs = novaObs;
+ if(novoTelefone!==null) e.telefone = telEdit;
+
  salvar();
 }
+
 
 function excluirEntrega(i){
  if(confirm('Excluir entrega?')){
@@ -194,13 +222,15 @@ document.getElementById('btnMapsExterno').onclick = ()=>{
 };
 
 document.getElementById('btnReordenar').onclick = ()=>{
+ if(!posicaoAtual){ alert('Localização não disponível'); return; }
  if(entregas.length<2){ alert('Entregas insuficientes'); return; }
- entregas.sort((a,b)=>{
-  if(b.prioridade!==a.prioridade) return b.prioridade-a.prioridade;
-  return a.endereco.length-b.endereco.length;
- });
+ entregas.sort((a,b)=>distancia(a)-distancia(b));
  salvar();
 };
+
+function distancia(e){
+ return e.endereco.length; // fallback simples sem API
+}
 
 function abrirRotaEntregaExterna(i){
  if(!posicaoAtual){ alert('Localização atual não disponível'); return; }
@@ -252,8 +282,14 @@ function atualizar(){
  entregas.forEach((e,i)=>{
   const d=document.createElement('div');
   d.className='card prioridade-'+(e.prioridade==3?'alta':e.prioridade==2?'media':'baixa');
-  d.innerHTML=`<strong>${i+1}. ${e.nome}</strong><br>${e.endereco}<br>CEP ${e.cep||'-'}<br>
+  d.innerHTML=`<strong>${i+1}. ${e.nome}</strong><br>${e.endereco}<br>CEP ${e.cep||'-'}<br>📞 ${e.telefone 
+ ? `<a href="https://wa.me/${e.telefone}?text=${encodeURIComponent('Olá, Sua compra Magalu está prestes a sair para entrega, por gentileza nos envie sua localização para agilizar o serviço. Obrigado!')}" target="_blank">${e.telefone}</a>` 
+ : 'Sem telefone'}<br>
   <button onclick="editarEntrega(${i})">Editar</button>
+  ${e.telefone?`<a href="https://wa.me/${e.telefone}?text=${encodeURIComponent('Olá, Sua compra Magalu está prestes a sair para entrega, por gentileza nos envie sua localização para agilizar o serviço. Obrigado!')}" target="_blank">
+ <button style="background:#25d366">💬 WhatsApp</button>
+</a>
+`:''}
   <button onclick="abrirRotaEntregaExterna(${i})" style="background:#455a64">Maps</button>
   <button onclick="excluirEntrega(${i})" style="background:#b71c1c">Excluir</button>
   <button onclick="entregar(${i})">Entregue</button>`;
